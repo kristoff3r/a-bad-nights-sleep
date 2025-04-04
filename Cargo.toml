@@ -20,6 +20,10 @@ strip = "debuginfo"
 [dependencies]
 avian2d = "0.2.1"
 bevy = { version = "0.15.3", features = ["dynamic_linking"] }
+bevy_common_assets = { version = "0.12.0", features = ["ron"] }
 bevy_hanabi = { version = "0.15.0", default-features = false, features = [
     "2d",
 ] }
+vleue_navigator = { version = "0.11.1", features = ["avian2d"] }
+fastrand = "2.3.0"
+serde = { version = "1.0.219", features = ["derive"] }

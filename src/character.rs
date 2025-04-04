@@ -20,7 +20,6 @@ pub enum MovementAction {
 
 /// A marker component indicating that an entity is using a character controller.
 #[derive(Component)]
-#[require(Transform)]
 pub struct CharacterController;
 
 /// The acceleration used for character movement.
