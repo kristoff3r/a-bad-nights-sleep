@@ -3,6 +3,7 @@ use bevy::{
     math::{vec2, vec3},
     prelude::*,
 };
+use bevy_common_assets::ron::RonAssetPlugin;
 use fastrand::Rng;
 use serde::{Deserialize, Serialize};
 use vleue_navigator::NavMesh;
@@ -17,9 +18,10 @@ pub enum EnemyType {
     Basic,
 }
 
-#[derive(Component, Default, Serialize, Deserialize)]
+#[derive(Component, Default)]
 #[require(LastSpawnTime)]
 pub struct EnemySpawner {
+    pub start_pos: Vec2,
     pub spawn_rate: f32,
     pub spawn_count: u32,
     pub radius: f32,
@@ -31,18 +33,25 @@ pub struct LastSpawnTime(f32);
 #[derive(Component, Default, Clone, Copy)]
 pub struct Enemy;
 
-#[derive(Resource, Default, Serialize, Deserialize)]
-pub struct LevelState {
-    #[serde(skip)]
+#[derive(Resource, Default)]
+pub struct Level {
     pub navmesh: Handle<NavMesh>,
     pub spawners: Vec<EnemySpawner>,
+    pub rules: Handle<EnemyRules>,
+}
+
+#[derive(Asset, TypePath, Serialize, Deserialize)]
+pub struct EnemyRules {
+    pub base_speed: f32,
+    pub health: f32,
 }
 
 impl Plugin for LevelPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<LevelState>()
+        app.add_plugins(RonAssetPlugin::<EnemyRules>::new(&["enemies.ron"]))
+            .init_resource::<Level>()
             .add_systems(OnEnter(GameState::NightTime), load_level)
-            .add_systems(Update, (spawn_enemies).chain().after(spawn_enemy_spawner));
+            .add_systems(Update, (spawn_enemies));
     }
 }
 
@@ -51,17 +60,20 @@ fn load_level(
     mut navmeshes: ResMut<Assets<NavMesh>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut level: ResMut<LevelState>,
+    mut level: ResMut<Level>,
+    asset_server: Res<AssetServer>,
 ) {
     level.navmesh = navmeshes.add(NavMesh::from_edge_and_obstacles(vec![], vec![]));
+    level.rules = asset_server.load("enemies.ron");
 
     commands.spawn((
         EnemySpawner {
+            start_pos: vec2(200.0, 0.0),
             spawn_rate: 1.0,
             spawn_count: 5,
             radius: 10.0,
         },
-        Transform::from_translation(vec3(0.0, 0.0, 0.0)),
+        Transform::from_translation(vec3(200.0, 0.0, 0.0)),
         MeshMaterial2d(materials.add(Color::srgb(1.0, 1.0, 1.0))),
     ));
 }
@@ -79,6 +91,8 @@ fn spawn_enemies(
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut spawner_query: Query<(&EnemySpawner, &mut LastSpawnTime, &Transform)>,
+    rules: Res<Assets<EnemyRules>>,
+    level: Res<Level>,
     player_query: Query<&Transform, With<NightPlayer>>,
 ) {
     let Ok(player_transform) = player_query.get_single() else {
@@ -87,6 +101,8 @@ fn spawn_enemies(
 
     let cur_time = time.elapsed_secs();
     let mut rng = Rng::new();
+
+    let rules = rules.get(&level.rules).unwrap();
 
     for (enemy_spawner, mut last_spawn_time, transform) in spawner_query.iter_mut() {
         if last_spawn_time.0 + enemy_spawner.spawn_rate.recip() <= cur_time {
@@ -108,7 +124,7 @@ fn spawn_enemies(
                     Collider::circle(radius),
                     RigidBody::Dynamic,
                     MeshMaterial2d(materials.add(Color::srgb(1.0, 0.2, 0.2))),
-                    LinearVelocity(150.0 * direction),
+                    LinearVelocity(rules.base_speed * direction),
                 ));
             }
             **last_spawn_time = cur_time;
