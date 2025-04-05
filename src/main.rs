@@ -1,8 +1,10 @@
 pub mod character;
 pub mod day;
+pub mod effects;
 pub mod enemy;
 pub mod night;
 pub mod player;
+pub mod timed_entity;
 
 use avian2d::prelude::*;
 use bevy::{
@@ -13,9 +15,11 @@ use bevy::{
 use bevy_hanabi::HanabiPlugin;
 use character::CharacterControllerPlugin;
 use day::DayPlugin;
+use effects::EffectsPlugin;
 use enemy::EnemyPlugin;
 use night::NightPlugin;
 use player::PlayerPlugin;
+use timed_entity::TimedEntityPlugin;
 use vleue_navigator::VleueNavigatorPlugin;
 
 #[derive(PhysicsLayer, Default)]
@@ -37,6 +41,8 @@ fn main() {
         VleueNavigatorPlugin,
         HanabiPlugin,
         CharacterControllerPlugin,
+        TimedEntityPlugin,
+        EffectsPlugin,
         PlayerPlugin,
         EnemyPlugin,
         NightPlugin,

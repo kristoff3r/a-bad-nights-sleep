@@ -1,21 +1,38 @@
-use avian2d::prelude::{Collider, CollisionLayers, LinearVelocity, RigidBody};
+use avian2d::prelude::{Collider, Collision, CollisionLayers, LinearVelocity, RigidBody};
 use bevy::{math::vec2, prelude::*};
 use bevy_common_assets::ron::RonAssetPlugin;
 use fastrand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::{night::Level, player::NightPlayer, GameLayer, GameState};
+use crate::{
+    effects::{self, Effects},
+    night::Level,
+    player::NightPlayer,
+    timed_entity::Timed,
+    GameLayer, GameState,
+};
 
 pub struct EnemyPlugin;
 
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(RonAssetPlugin::<EnemyRules>::new(&["enemies.ron"]))
-            .add_systems(
-                Update,
-                (spawn_enemies).run_if(in_state(GameState::NightTime)),
-            );
+        app.add_plugins(RonAssetPlugin::<EnemyRules>::new(&["enemies.ron"]));
+        app.add_event::<EnemyDiedEvent>();
+        app.add_systems(
+            Update,
+            (
+                spawn_enemies,
+                (player_collisions, handle_enemy_death).chain(),
+            )
+                .run_if(in_state(GameState::NightTime)),
+        );
     }
+}
+
+#[derive(Event)]
+pub struct EnemyDiedEvent {
+    pub entity: Entity,
+    pub transform: GlobalTransform,
 }
 
 #[derive(Component)]
@@ -97,5 +114,49 @@ fn spawn_enemies(
             }
             **last_spawn_time = cur_time;
         }
+    }
+}
+
+fn player_collisions(
+    mut collision_event_reader: EventReader<Collision>,
+    enemies: Query<(Entity, &GlobalTransform), With<Enemy>>,
+    mut enemy_died_writer: EventWriter<EnemyDiedEvent>,
+) {
+    for Collision(contacts) in collision_event_reader.read() {
+        if contacts.collision_started() {
+            let Ok((enemy_entity, enemy_transform)) = enemies
+                .get(contacts.entity1)
+                .or_else(|_| enemies.get(contacts.entity2))
+            else {
+                continue;
+            };
+
+            enemy_died_writer.send(EnemyDiedEvent {
+                entity: enemy_entity,
+                transform: enemy_transform.clone(),
+            });
+        }
+    }
+}
+
+fn handle_enemy_death(
+    mut commands: Commands,
+    mut player_query: Query<&mut NightPlayer>,
+    mut enemy_died_event_reader: EventReader<EnemyDiedEvent>,
+    effects: Res<Effects>,
+) {
+    let Ok(mut player) = player_query.get_single_mut() else {
+        return;
+    };
+
+    for &EnemyDiedEvent { entity, transform } in enemy_died_event_reader.read() {
+        commands.entity(entity).despawn_recursive();
+        commands.spawn((
+            StateScoped(GameState::NightTime),
+            Timed(0.5),
+            Transform::from_translation(transform.translation()),
+            effects.death_effect.clone(),
+        ));
+        player.health -= 1.0;
     }
 }
