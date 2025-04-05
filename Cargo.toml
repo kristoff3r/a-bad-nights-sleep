@@ -3,9 +3,13 @@ name = "jam"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["dev_native"]
+dev = ["bevy/dynamic_linking", "bevy/bevy_dev_tools", "avian2d/debug-plugin"]
+dev_native = ["dev", "bevy/file_watcher", "bevy/embedded_watcher"]
+
 [profile.dev]
 opt-level = 1
-
 
 [profile.release]
 codegen-units = 1
@@ -16,10 +20,9 @@ inherits = "release"
 opt-level = "s"
 strip = "debuginfo"
 
-
 [dependencies]
+bevy = { version = "0.15.3", features = ["webgpu"] }
 avian2d = "0.2.1"
-bevy = { version = "0.15.3", features = ["dynamic_linking", "file_watcher"] }
 bevy_common_assets = { version = "0.12.0", features = ["ron"] }
 bevy_hanabi = { version = "0.15.0", default-features = false, features = [
     "2d",

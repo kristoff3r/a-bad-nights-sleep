@@ -1,44 +1,84 @@
 pub mod character;
-mod level;
-mod player;
+pub mod day;
+pub mod enemy;
+pub mod night;
+pub mod player;
 
 use avian2d::prelude::*;
-use bevy::prelude::*;
+use bevy::{
+    asset::AssetMetaCheck,
+    core_pipeline::{bloom::Bloom, tonemapping::Tonemapping},
+    prelude::*,
+};
 use bevy_hanabi::HanabiPlugin;
 use character::CharacterControllerPlugin;
-use level::LevelPlugin;
+use day::DayPlugin;
+use enemy::EnemyPlugin;
+use night::NightPlugin;
 use player::PlayerPlugin;
 use vleue_navigator::VleueNavigatorPlugin;
 
+#[derive(PhysicsLayer, Default)]
+enum GameLayer {
+    #[default]
+    Default,
+    Player,
+    Enemy,
+}
+
 fn main() {
-    App::new()
-        .add_plugins((
-            DefaultPlugins,
-            PhysicsPlugins::default().with_length_unit(20.0),
-            VleueNavigatorPlugin,
-            HanabiPlugin,
-            CharacterControllerPlugin,
-            PlayerPlugin,
-            LevelPlugin,
-        ))
-        .init_state::<GameState>()
-        .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
-        .add_systems(Startup, game_setup)
-        .run();
+    let mut app = App::new();
+    app.add_plugins((
+        DefaultPlugins.set(AssetPlugin {
+            meta_check: AssetMetaCheck::Never,
+            ..default()
+        }),
+        PhysicsPlugins::default().with_length_unit(20.0),
+        VleueNavigatorPlugin,
+        HanabiPlugin,
+        CharacterControllerPlugin,
+        PlayerPlugin,
+        EnemyPlugin,
+        NightPlugin,
+        DayPlugin,
+    ))
+    .init_state::<GameState>()
+    .enable_state_scoped_entities::<GameState>()
+    .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
+    .add_systems(Startup, game_setup);
+
+    #[cfg(feature = "dev")]
+    app.add_plugins(avian2d::debug_render::PhysicsDebugPlugin::default())
+        .add_systems(Update, print_collisions);
+
+    app.run();
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]
 pub enum GameState {
-    DayTime,
     #[default]
+    DayTime,
     NightTime,
 }
 
-fn game_setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
+fn game_setup(mut commands: Commands) {
     // Camera
-    commands.spawn(Camera2d);
+    commands.spawn((
+        Camera2d,
+        Camera {
+            hdr: true,
+            ..default()
+        },
+        Tonemapping::TonyMcMapface,
+        Bloom::default(),
+    ));
+}
+
+fn print_collisions(mut collision_event_reader: EventReader<Collision>) {
+    for Collision(contacts) in collision_event_reader.read() {
+        println!(
+            "Entities {} and {} are colliding",
+            contacts.entity1, contacts.entity2,
+        );
+    }
 }
