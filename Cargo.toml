@@ -1,5 +1,6 @@
 [package]
-name = "jam"
+name = "a-bad-nights-sleep"
+authors = ["Kristoffer Søholm"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"

@@ -3,6 +3,19 @@
 version = 4
 
 [[package]]
+name = "a-bad-nights-sleep"
+version = "0.1.0"
+dependencies = [
+ "avian2d",
+ "bevy",
+ "bevy_common_assets",
+ "bevy_hanabi",
+ "fastrand",
+ "serde",
+ "vleue_navigator",
+]
+
+[[package]]
 name = "accesskit"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2738,19 +2751,6 @@ name = "itoa"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
-
-[[package]]
-name = "jam"
-version = "0.1.0"
-dependencies = [
- "avian2d",
- "bevy",
- "bevy_common_assets",
- "bevy_hanabi",
- "fastrand",
- "serde",
- "vleue_navigator",
-]
 
 [[package]]
 name = "jni"
