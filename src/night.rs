@@ -1,8 +1,4 @@
-use bevy::{
-    math::{vec2, vec3},
-    prelude::*,
-    time::Stopwatch,
-};
+use bevy::{math::vec2, prelude::*, time::Stopwatch};
 use fastrand::Rng;
 use vleue_navigator::NavMesh;
 

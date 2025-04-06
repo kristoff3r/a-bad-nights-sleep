@@ -62,12 +62,7 @@ pub const UPGRADES: &[Upgrade] = &[
 #[derive(Component)]
 pub struct StatsField;
 
-fn spawn_menus(
-    mut commands: Commands,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    asset_server: Res<AssetServer>,
-    player_stats: Res<PlayerStats>,
-) {
+fn spawn_menus(mut commands: Commands, player_stats: Res<PlayerStats>) {
     let mut menu = commands.spawn((
         StateScoped(GameState::DayTime),
         Node {
@@ -291,7 +286,7 @@ fn update_stats(
         return;
     }
 
-    for (mut text, node) in query.iter_mut() {
+    for (mut text, _node) in query.iter_mut() {
         let name = text.0.split("    ").next().unwrap_or("");
         text.0 = create_stat_string(&player_stats, name);
     }
@@ -324,13 +319,13 @@ fn day_string(player_stats: &PlayerStats) -> &'static str {
     }
 }
 
-fn start_level(mut trigger: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<GameState>>) {
+fn start_level(trigger: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<GameState>>) {
     if trigger.button == PointerButton::Primary {
         next_state.set(GameState::NightTime);
     }
 }
 
-fn quit(mut trigger: Trigger<Pointer<Click>>, mut app_exit: EventWriter<AppExit>) {
+fn quit(trigger: Trigger<Pointer<Click>>, mut app_exit: EventWriter<AppExit>) {
     if trigger.button == PointerButton::Primary {
         app_exit.send(AppExit::Success);
     }
@@ -357,7 +352,7 @@ fn button_hover_effect_over(
     trigger: Trigger<Pointer<Over>>,
     mut node_query: Query<(&mut Node, &mut BackgroundColor)>,
 ) {
-    let Ok((node, mut bg_color)) = node_query.get_mut(trigger.entity()) else {
+    let Ok((_node, mut bg_color)) = node_query.get_mut(trigger.entity()) else {
         return;
     };
 
@@ -368,7 +363,7 @@ fn button_hover_effect_out(
     trigger: Trigger<Pointer<Out>>,
     mut node_query: Query<(&mut Node, &mut BackgroundColor)>,
 ) {
-    let Ok((node, mut bg_color)) = node_query.get_mut(trigger.entity()) else {
+    let Ok((_node, mut bg_color)) = node_query.get_mut(trigger.entity()) else {
         return;
     };
 

@@ -2,8 +2,7 @@ use avian2d::prelude::{Collider, CollisionLayers, LinearVelocity, RigidBody, Sen
 use bevy::{color::palettes::tailwind, prelude::*};
 
 use crate::{
-    character::CharacterControllerBundle, effects::Effects, enemy::Enemy, night::LevelState,
-    GameLayer, GameState,
+    character::CharacterControllerBundle, enemy::Enemy, night::LevelState, GameLayer, GameState,
 };
 
 pub struct PlayerPlugin;
@@ -93,9 +92,9 @@ fn player_shoot(
     time: Res<Time>,
     enemies: Query<&GlobalTransform, With<Enemy>>,
     player_stats: Res<PlayerStats>,
-    mut player_query: Query<(Entity, &mut NightPlayer, &Transform)>,
+    mut player_query: Query<(&mut NightPlayer, &Transform)>,
 ) {
-    let Ok((player_entity, mut player, player_transform)) = player_query.get_single_mut() else {
+    let Ok((mut player, player_transform)) = player_query.get_single_mut() else {
         return;
     };
 
@@ -144,7 +143,6 @@ fn player_shoot(
 fn player_death(
     player_query: Query<(&NightPlayer, &GlobalTransform)>,
     mut next_state: ResMut<NextState<GameState>>,
-    level_state: Res<LevelState>,
     mut player_stats: ResMut<PlayerStats>,
 ) {
     let Ok((player, transform)) = player_query.get_single() else {
@@ -170,11 +168,7 @@ struct HudSleepTimer;
 #[derive(Component)]
 struct HudHealth;
 
-fn spawn_hud(
-    mut commands: Commands,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    asset_server: Res<AssetServer>,
-) {
+fn spawn_hud(mut commands: Commands) {
     commands.spawn((
         HudSleepTimer,
         StateScoped(GameState::NightTime),

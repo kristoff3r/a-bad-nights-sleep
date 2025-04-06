@@ -5,7 +5,7 @@ use fastrand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    effects::{self, Effects},
+    effects::Effects,
     night::Level,
     player::{NightPlayer, PlayerShot, PlayerStats},
     timed_entity::Timed,
