@@ -115,6 +115,8 @@ fn movement(
     // both the `f32` and `f64` features. Otherwise you don't need this.
     let delta_time = time.delta_secs_f64().adjust_precision();
 
+    // let max_speed = 500.0;
+
     for event in movement_event_reader.read() {
         for (movement_acceleration, mut linear_velocity) in &mut controllers {
             match event {
@@ -125,6 +127,9 @@ fn movement(
                     if direction.y != 0.0 {
                         linear_velocity.y += direction.y * movement_acceleration.0 * delta_time;
                     }
+                    //  if linear_velocity.length() > max_speed {
+                    //      linear_velocity.0 = linear_velocity.normalize() * max_speed;
+                    //  }
                 }
             }
         }
@@ -135,6 +140,6 @@ fn movement(
 fn apply_movement_damping(mut query: Query<(&MovementDampingFactor, &mut LinearVelocity)>) {
     for (damping_factor, mut linear_velocity) in &mut query {
         // We could use `LinearDamping`, but we don't want to dampen movement along the Y axis
-        linear_velocity.x *= damping_factor.0;
+        linear_velocity.0 *= damping_factor.0;
     }
 }

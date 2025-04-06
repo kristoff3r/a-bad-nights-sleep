@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     effects::{self, Effects},
     night::Level,
-    player::NightPlayer,
+    player::{NightPlayer, PlayerShot, PlayerStats},
     timed_entity::Timed,
     GameLayer, GameState,
 };
@@ -22,7 +22,8 @@ impl Plugin for EnemyPlugin {
             Update,
             (
                 spawn_enemies,
-                (player_collisions, handle_enemy_death).chain(),
+                target_enemies,
+                (handle_collisions, handle_enemy_death).chain(),
             )
                 .run_if(in_state(GameState::NightTime)),
         );
@@ -33,21 +34,23 @@ impl Plugin for EnemyPlugin {
 pub struct EnemyDiedEvent {
     pub entity: Entity,
     pub transform: GlobalTransform,
+    pub killed: bool,
 }
 
-#[derive(Component)]
+#[derive(Component, Default, Clone, Copy)]
 #[require(Enemy)]
 pub enum EnemyType {
+    #[default]
     Basic,
+    Spawner,
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Clone)]
 #[require(LastSpawnTime)]
 pub struct EnemySpawner {
-    pub start_pos: Vec2,
     pub spawn_rate: f32,
-    pub spawn_count: u32,
     pub radius: f32,
+    pub spawn_type: EnemyType,
 }
 
 #[derive(Component, Default, Deref, DerefMut)]
@@ -90,38 +93,42 @@ fn spawn_enemies(
 
     for (enemy_spawner, mut last_spawn_time, transform) in spawner_query.iter_mut() {
         if last_spawn_time.0 + enemy_spawner.spawn_rate.recip() <= cur_time {
-            for _ in 0..enemy_spawner.spawn_count {
-                let rx = rng.f32();
-                let ry = rng.f32();
-                let pos = transform.translation.truncate()
-                    + vec2(
-                        rx * enemy_spawner.radius * 2.0 - enemy_spawner.radius,
-                        ry * enemy_spawner.radius * 2.0 - enemy_spawner.radius,
-                    );
+            let rx = rng.f32();
+            let ry = rng.f32();
+            let pos = transform.translation.truncate()
+                + vec2(
+                    rx * enemy_spawner.radius * 2.0 - enemy_spawner.radius,
+                    ry * enemy_spawner.radius * 2.0 - enemy_spawner.radius,
+                );
 
-                let direction = (player_transform.translation.truncate() - pos).normalize();
-                commands.spawn((
-                    Enemy,
-                    StateScoped(GameState::NightTime),
-                    Transform::from_translation(pos.extend(0.0)),
-                    Mesh2d(mesh.clone()),
-                    Collider::circle(radius),
-                    CollisionLayers::new(GameLayer::Enemy, [GameLayer::Default, GameLayer::Player]),
-                    RigidBody::Dynamic,
-                    MeshMaterial2d(material.clone()),
-                    LinearVelocity(rules.base_speed * direction),
-                ));
-            }
+            let direction = (player_transform.translation.truncate() - pos).normalize();
+            commands.spawn((
+                Enemy,
+                StateScoped(GameState::NightTime),
+                Transform::from_translation(pos.extend(0.0)),
+                Mesh2d(mesh.clone()),
+                Collider::circle(radius),
+                CollisionLayers::new(GameLayer::Enemy, [GameLayer::Default, GameLayer::Player]),
+                RigidBody::Dynamic,
+                MeshMaterial2d(material.clone()),
+                LinearVelocity(rules.base_speed * direction),
+            ));
             **last_spawn_time = cur_time;
         }
     }
 }
 
-fn player_collisions(
+fn handle_collisions(
+    mut commands: Commands,
     mut collision_event_reader: EventReader<Collision>,
     enemies: Query<(Entity, &GlobalTransform), With<Enemy>>,
     mut enemy_died_writer: EventWriter<EnemyDiedEvent>,
+    player: Query<Entity, With<NightPlayer>>,
+    shots: Query<Entity, With<PlayerShot>>,
 ) {
+    let Ok(player) = player.get_single() else {
+        return;
+    };
     for Collision(contacts) in collision_event_reader.read() {
         if contacts.collision_started() {
             let Ok((enemy_entity, enemy_transform)) = enemies
@@ -131,17 +138,53 @@ fn player_collisions(
                 continue;
             };
 
+            let killed = !(contacts.entity1 == player || contacts.entity2 == player);
+
+            if shots.get(contacts.entity1).is_ok() {
+                commands.entity(contacts.entity1).despawn_recursive();
+            } else if shots.get(contacts.entity2).is_ok() {
+                commands.entity(contacts.entity2).despawn_recursive();
+            }
+
             enemy_died_writer.send(EnemyDiedEvent {
                 entity: enemy_entity,
                 transform: enemy_transform.clone(),
+                killed,
             });
         }
+    }
+}
+
+fn target_enemies(
+    mut enemy_query: Query<(&mut LinearVelocity, &GlobalTransform), With<Enemy>>,
+    player_query: Query<&GlobalTransform, With<NightPlayer>>,
+    time: Res<Time>,
+    rules: Res<Assets<EnemyRules>>,
+    level: Res<Level>,
+) {
+    let Ok(player_transform) = player_query.get_single() else {
+        return;
+    };
+
+    let Some(rules) = rules.get(&level.rules) else {
+        return;
+    };
+
+    let speed = rules.base_speed;
+
+    for (mut velocity, enemy_transform) in enemy_query.iter_mut() {
+        let direction = (player_transform.translation().truncate()
+            - enemy_transform.translation().truncate())
+        .normalize();
+        **velocity += direction * time.delta_secs() * 100.0;
+        velocity.0 = velocity.0.clamp_length_max(speed);
     }
 }
 
 fn handle_enemy_death(
     mut commands: Commands,
     mut player_query: Query<&mut NightPlayer>,
+    mut player_stats: ResMut<PlayerStats>,
     mut enemy_died_event_reader: EventReader<EnemyDiedEvent>,
     effects: Res<Effects>,
 ) {
@@ -149,7 +192,12 @@ fn handle_enemy_death(
         return;
     };
 
-    for &EnemyDiedEvent { entity, transform } in enemy_died_event_reader.read() {
+    for &EnemyDiedEvent {
+        entity,
+        transform,
+        killed,
+    } in enemy_died_event_reader.read()
+    {
         commands.entity(entity).despawn_recursive();
         commands.spawn((
             StateScoped(GameState::NightTime),
@@ -157,6 +205,11 @@ fn handle_enemy_death(
             Transform::from_translation(transform.translation()),
             effects.death_effect.clone(),
         ));
-        player.health -= 1.0;
+
+        if killed {
+            player_stats.unsafe_rest += 5;
+        } else {
+            player.health -= 1.0;
+        }
     }
 }

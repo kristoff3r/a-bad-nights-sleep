@@ -65,6 +65,8 @@ pub enum GameState {
     #[default]
     DayTime,
     NightTime,
+    GameOver,
+    GameWon,
 }
 
 fn game_setup(mut commands: Commands) {

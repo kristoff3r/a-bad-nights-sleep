@@ -53,8 +53,8 @@ fn death_effect() -> EffectAsset {
 
     let round = RoundModifier::constant(&mut module, 2.0 / 3.0);
 
-    let spawner = SpawnerSettings::rate(300.0.into());
-    EffectAsset::new(1024, spawner, module)
+    let spawner = SpawnerSettings::rate(10.0.into());
+    EffectAsset::new(4096, spawner, module)
         .with_name("death effect")
         .init(init_pos)
         .init(init_vel)

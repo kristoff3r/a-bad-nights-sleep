@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use bevy::{color::palettes::tailwind, prelude::*};
 
 use crate::{player::PlayerStats, GameState};
@@ -8,7 +6,9 @@ pub struct DayPlugin;
 
 impl Plugin for DayPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::DayTime), spawn_menus);
+        app.add_systems(OnEnter(GameState::DayTime), (new_day, spawn_menus).chain());
+        app.add_systems(OnEnter(GameState::GameOver), spawn_over);
+        app.add_systems(OnEnter(GameState::GameWon), spawn_won);
         app.add_systems(Update, update_stats);
     }
 }
@@ -23,57 +23,39 @@ pub struct Upgrade {
 
 pub const UPGRADES: &[Upgrade] = &[
     Upgrade {
-        name: "melatonin",
-        description: &["+5 sleep intensity", "+5 sleep duration"],
+        name: "Melatonin",
+        description: &["+5 sleep duration"],
         cost: 50,
         effect: |player_stats| {
-            player_stats.sleep_intensity += 5.0;
             player_stats.sleep_duration += 5.0;
         },
     },
     Upgrade {
-        name: "extra blanket",
-        description: &["+10 comfy"],
-        cost: 70,
+        name: "Extra blanket",
+        description: &["+1 warmth"],
+        cost: 150,
         effect: |player_stats| {
-            player_stats.comfort += 10.0;
+            player_stats.warmth += 1.0;
         },
     },
     Upgrade {
-        name: "placeholder",
-        description: &["no effect"],
-        cost: 1,
-        effect: |player_stats| {},
+        name: "Milk and cookies",
+        description: &["+2 hydration", "+3 comfort"],
+        cost: 40,
+        effect: |player_stats| {
+            player_stats.hydration += 5.0;
+            player_stats.comfort += 5.0;
+        },
     },
     Upgrade {
-        name: "placeholder",
-        description: &["no effect"],
-        cost: 1,
-        effect: |player_stats| {},
-    },
-    Upgrade {
-        name: "placeholder",
-        description: &["no effect"],
-        cost: 1,
-        effect: |player_stats| {},
-    },
-    Upgrade {
-        name: "placeholder",
-        description: &["no effect"],
-        cost: 1,
-        effect: |player_stats| {},
-    },
-    Upgrade {
-        name: "placeholder",
-        description: &["no effect"],
-        cost: 1,
-        effect: |player_stats| {},
-    },
-    Upgrade {
-        name: "placeholder",
-        description: &["no effect"],
-        cost: 1,
-        effect: |player_stats| {},
+        name: "Booze",
+        description: &["-5 hydration", "-2 comfort", "+10 sleep duration"],
+        cost: 40,
+        effect: |player_stats| {
+            player_stats.hydration -= 5.0;
+            player_stats.comfort -= 2.0;
+            player_stats.sleep_duration += 10.0;
+        },
     },
 ];
 
@@ -116,12 +98,32 @@ fn spawn_menus(
                 ..default()
             },
         ));
+        let mut day = menu.spawn((
+            Node {
+                margin: UiRect::all(Val::Px(10.0)),
+                ..default()
+            },
+            Text::new(format!(
+                "{} (day {})",
+                day_string(&player_stats),
+                player_stats.day
+            )),
+            TextFont {
+                font_size: 12.0,
+                ..default()
+            },
+        ));
+
+        if player_stats.day == 6 {
+            day.insert(TextColor(tailwind::RED_500.into()));
+        }
+
         menu.spawn((
             Node {
                 margin: UiRect::all(Val::Px(10.0)),
                 ..default()
             },
-            Text::new(day_string(&player_stats)),
+            Text::new("Sleep 60 seconds before day 7 to win"),
             TextFont {
                 font_size: 12.0,
                 ..default()
@@ -149,7 +151,14 @@ fn spawn_menus(
                 },
                 BackgroundColor(Color::NONE),
             ));
-            for name in ["Comfort", "Snug", "Warmth", "Hydration", "Rest"] {
+            for name in [
+                "Comfort",
+                "Warmth",
+                "Hydration",
+                "Sleep duration",
+                "Rest gained",
+                "Rest",
+            ] {
                 let text = create_stat_string(&player_stats, name);
                 stats.spawn((
                     Node {
@@ -211,7 +220,7 @@ fn spawn_menus(
                             margin: UiRect::axes(Val::Px(10.0), Val::Px(5.0)),
                             ..default()
                         },
-                        Text::new(format!("{name} ({cost})")),
+                        Text::new(format!("{name} ({cost} rest)")),
                         TextFont {
                             font_size: 12.0,
                             ..default()
@@ -283,7 +292,7 @@ fn update_stats(
     }
 
     for (mut text, node) in query.iter_mut() {
-        let name = text.0.split(' ').next().unwrap_or("");
+        let name = text.0.split("    ").next().unwrap_or("");
         text.0 = create_stat_string(&player_stats, name);
     }
 }
@@ -295,17 +304,22 @@ fn create_stat_string(player_stats: &PlayerStats, name: &str) -> String {
         "Warmth" => player_stats.warmth,
         "Hydration" => player_stats.hydration,
         "Rest" => player_stats.rest as f32,
+        "Sleep duration" => player_stats.sleep_duration,
+        "Rest gained" => player_stats.unsafe_rest as f32,
         _ => panic!("Unknown stat name: {name}"),
     };
 
-    format!("{name:12} {stat}")
+    format!("{name:25} {stat}")
 }
 
 fn day_string(player_stats: &PlayerStats) -> &'static str {
     match player_stats.day {
-        0 => "It's the first day, better get to sleep",
-        1 => "Day 2",
-        2 => "Day 3",
+        1 => "It's the first day, better get to sleep",
+        2 => "You slept a while, but not enough. Guess you should try again",
+        3 => "That was refreshing, but you still feel tired",
+        4 => "The bed fills you with dread, are you prepared for the night?",
+        5 => "Surely you can sleep a full night right?",
+        6 => "You can't really keep going, this is your final chance",
         _ => "Day ???",
     }
 }
@@ -359,4 +373,118 @@ fn button_hover_effect_out(
     };
 
     bg_color.0 = Color::NONE;
+}
+
+fn new_day(mut player_stats: ResMut<PlayerStats>, mut next_state: ResMut<NextState<GameState>>) {
+    player_stats.rest += player_stats.unsafe_rest;
+    player_stats.day += 1;
+
+    if player_stats.sleep_duration >= 59.0 && !player_stats.died {
+        next_state.set(GameState::GameWon);
+    } else if player_stats.day > 6 {
+        next_state.set(GameState::GameOver);
+    }
+}
+
+fn spawn_over(mut commands: Commands) {
+    let mut menu = commands.spawn((
+        StateScoped(GameState::GameOver),
+        Node {
+            flex_direction: FlexDirection::Column,
+            width: Val::Percent(90.0),
+            height: Val::Percent(90.0),
+            justify_self: JustifySelf::Center,
+            align_self: AlignSelf::Center,
+            ..default()
+        },
+        BackgroundColor(tailwind::RED_300.into()),
+        PickingBehavior::IGNORE,
+    ));
+
+    menu.observe(|mut trigger: Trigger<Pointer<Click>>| {
+        trigger.propagate(false);
+    });
+
+    menu.with_children(|menu| {
+        menu.spawn((
+            Node {
+                margin: UiRect::all(Val::Px(10.0)),
+                ..default()
+            },
+            Text::new("You failed to sleep through the night"),
+            TextFont {
+                font_size: 32.0,
+                ..default()
+            },
+        ));
+        menu.spawn((
+            Node {
+                margin: UiRect::all(Val::Px(10.0)),
+                ..default()
+            },
+            Text::new("Try again?"),
+            TextFont {
+                font_size: 12.0,
+                ..default()
+            },
+        ))
+        .observe(new_game);
+    });
+}
+
+fn spawn_won(mut commands: Commands) {
+    let mut menu = commands.spawn((
+        StateScoped(GameState::GameWon),
+        Node {
+            flex_direction: FlexDirection::Column,
+            width: Val::Percent(90.0),
+            height: Val::Percent(90.0),
+            justify_self: JustifySelf::Center,
+            align_self: AlignSelf::Center,
+            ..default()
+        },
+        BackgroundColor(tailwind::GREEN_300.into()),
+        PickingBehavior::IGNORE,
+    ));
+
+    menu.observe(|mut trigger: Trigger<Pointer<Click>>| {
+        trigger.propagate(false);
+    });
+
+    menu.with_children(|menu| {
+        menu.spawn((
+            Node {
+                margin: UiRect::all(Val::Px(10.0)),
+                ..default()
+            },
+            Text::new("You survived the night"),
+            TextFont {
+                font_size: 32.0,
+                ..default()
+            },
+        ));
+        menu.spawn((
+            Node {
+                margin: UiRect::all(Val::Px(10.0)),
+                ..default()
+            },
+            Text::new("Try again?"),
+            TextFont {
+                font_size: 12.0,
+                ..default()
+            },
+        ))
+        .observe(new_game);
+    });
+}
+
+fn new_game(
+    trigger: Trigger<Pointer<Click>>,
+    mut player_stats: ResMut<PlayerStats>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    if trigger.button == PointerButton::Primary {
+        *player_stats = PlayerStats::default();
+        next_state.set(GameState::DayTime);
+    }
 }
