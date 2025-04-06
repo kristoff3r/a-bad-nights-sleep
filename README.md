@@ -1,5 +1,7 @@
 # A bad nights sleep
 
+https://kriztw.itch.io/a-bad-nights-sleep
+
 Win condition: sleep through an entire night
 
 Gameplay loop:
